@@ -56,8 +56,24 @@ bash scripts/deploy.sh "更新说明"
 
 ### 注意
 
-- **私有仓库启用 Pages 需要 GitHub Pro / Team 及以上套餐**。免费账号的私有仓库无法发布 Pages，可改用下面的「自托管」，或把仓库改为 public。
-- 首次部署后站点地址为 `https://<用户名>.github.io/<仓库名>/`。
+- **GitHub Pages 对私有仓库需要 Pro / Team 及以上套餐**。免费账号请把仓库设为 public，或改用下面的「自托管」。本仓库当前为 public。
+- 首次部署后站点地址为 `https://<用户名>.github.io/<仓库名>/`，本项目为 https://zer0tsu.github.io/hex-mosaic/ 。
+
+### 常见问题
+
+**`git push` 报 `Failed to connect to github.com port 443 via 127.0.0.1`**
+
+全局 git 配置里的代理端口不可用。查看并修正：
+
+```powershell
+git config --global --get-regexp proxy          # 查看当前代理
+git config --global http.proxy http://127.0.0.1:7890   # 改成实际在用的代理端口
+git config --global --unset http.proxy          # 或直连时取消代理
+```
+
+**Actions 报 `Your current plan does not support GitHub Pages`**
+
+原因同上，仓库为私有且账号为免费套餐。
 
 ## 4. 自托管
 
