@@ -1,0 +1,19 @@
+# 系统文件
+Thumbs.db
+Desktop.ini
+.DS_Store
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# 构建产物
+dist/
+out/
+
+# 编辑器
+.vscode/
+.idea/
+*.swp

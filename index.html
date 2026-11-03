@@ -1,0 +1,1580 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>六边形点阵 · 图片风格化</title>
+<style>
+  :root{
+    --bg:#0e0f11;
+    --panel:#16181b;
+    --panel-2:#1e2125;
+    --line:#2a2e34;
+    --line-2:#3a4048;
+    --text:#e8eaee;
+    --muted:#888e99;
+    --accent:#5eb0ff;
+    --accent-ink:#07131f;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:0;background:var(--bg);color:var(--text);overflow:hidden;
+    font:13px/1.55 "Segoe UI","Microsoft YaHei",system-ui,-apple-system,sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+  #app{display:flex;flex-direction:column;height:100%}
+
+  header{
+    display:flex;align-items:center;gap:10px;padding:9px 14px;
+    border-bottom:1px solid var(--line);background:var(--panel);flex:none;
+  }
+  .brand{font-weight:600;letter-spacing:.2px;white-space:nowrap}
+  .brand em{color:var(--muted);font-style:normal;font-weight:400;margin-left:8px;font-size:12px}
+  header .spacer{flex:1}
+
+  .btn{
+    background:var(--panel-2);border:1px solid var(--line);border-radius:8px;
+    padding:6px 12px;cursor:pointer;transition:background .14s,border-color .14s,opacity .14s;
+    font:inherit;color:inherit;white-space:nowrap;
+  }
+  .btn:hover{background:#252931;border-color:var(--line-2)}
+  .btn:active{transform:translateY(1px)}
+  .btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink);font-weight:600}
+  .btn.primary:hover{background:#7cc0ff;border-color:#7cc0ff}
+  .btn.ghost{background:transparent}
+  .btn.on{background:#25507a;border-color:#3d80c4;color:#dff0ff;font-weight:600}
+  .btn[disabled]{opacity:.4;cursor:not-allowed}
+
+  main{flex:1;display:flex;min-height:0}
+
+  #stage{
+    flex:1;min-width:0;position:relative;display:flex;align-items:center;justify-content:center;
+    overflow:hidden;
+    background:
+      linear-gradient(45deg,#15171a 25%,transparent 25%,transparent 75%,#15171a 75%),
+      linear-gradient(45deg,#15171a 25%,#101215 25%,#101215 75%,#15171a 75%);
+    background-size:22px 22px;background-position:0 0,11px 11px;
+  }
+  #view{
+    display:block;box-shadow:0 12px 40px rgba(0,0,0,.55);border-radius:2px;
+    background:#000;
+  }
+  #view.hidden{visibility:hidden}
+  #stage.picking{cursor:crosshair}
+  #stage.picking #view{outline:2px solid var(--accent);outline-offset:2px}
+
+  #drop{
+    position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;
+    gap:10px;text-align:center;padding:24px;pointer-events:none;
+  }
+  #drop.hide{display:none}
+  #drop .box{
+    border:1.5px dashed var(--line-2);border-radius:14px;padding:34px 46px;max-width:480px;
+    background:rgba(20,22,26,.72);backdrop-filter:blur(2px);
+  }
+  #drop .big{font-size:15px;font-weight:600;margin-bottom:6px}
+  #drop .sub{color:var(--muted);font-size:12.5px;line-height:1.8}
+  kbd{
+    background:var(--panel-2);border:1px solid var(--line);border-bottom-width:2px;
+    border-radius:5px;padding:1px 6px;font:inherit;font-size:11.5px;color:#c8ccd4;
+  }
+  #stage.dragover::after{
+    content:"";position:absolute;inset:10px;border:2px dashed var(--accent);
+    border-radius:14px;pointer-events:none;
+  }
+
+  #panel{
+    width:330px;flex:none;border-left:1px solid var(--line);background:var(--panel);
+    overflow-y:auto;overscroll-behavior:contain;
+  }
+  #panel::-webkit-scrollbar{width:10px}
+  #panel::-webkit-scrollbar-thumb{background:#2c313a;border-radius:6px;border:3px solid var(--panel)}
+
+  .sec{border-bottom:1px solid var(--line);padding:12px 14px 14px}
+  .sec:last-child{border-bottom:none}
+  .sec>h3{
+    margin:0 0 10px;font-size:11px;letter-spacing:1.2px;text-transform:uppercase;
+    color:var(--muted);font-weight:600;
+  }
+  .row{margin-bottom:11px}
+  .row:last-child{margin-bottom:0}
+  .row-head{display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin-bottom:5px}
+  .row-head .name{font-size:12.5px}
+  .row-head .val{font-size:11.5px;color:var(--muted);font-variant-numeric:tabular-nums}
+  .hint{margin-top:4px;font-size:11px;color:var(--muted);line-height:1.5}
+
+  input[type=range]{
+    -webkit-appearance:none;appearance:none;width:100%;height:20px;background:transparent;cursor:pointer;margin:0;
+  }
+  input[type=range]::-webkit-slider-runnable-track{height:4px;border-radius:3px;background:#2b3038}
+  input[type=range]::-webkit-slider-thumb{
+    -webkit-appearance:none;width:14px;height:14px;border-radius:50%;background:var(--accent);
+    border:2px solid #0f1216;margin-top:-5px;box-shadow:0 1px 3px rgba(0,0,0,.5);
+  }
+  input[type=range]:focus-visible{outline:none}
+  input[type=range]:focus-visible::-webkit-slider-thumb{box-shadow:0 0 0 3px rgba(94,176,255,.35)}
+
+  .seg{display:flex;background:var(--panel-2);border:1px solid var(--line);border-radius:8px;padding:2px;gap:2px}
+  .seg button{
+    flex:1;border:0;background:transparent;color:var(--muted);padding:5px 6px;border-radius:6px;
+    cursor:pointer;font:inherit;font-size:12.5px;transition:.14s;
+  }
+  .seg button:hover{color:var(--text)}
+  .seg button.on{background:#2e343d;color:var(--text);font-weight:600}
+
+  .check{display:flex;align-items:center;gap:9px;cursor:pointer;user-select:none;font-size:12.5px}
+  .check input{appearance:none;-webkit-appearance:none;width:34px;height:19px;border-radius:10px;background:#2b3038;
+    position:relative;cursor:pointer;transition:background .16s;flex:none;margin:0}
+  .check input::after{
+    content:"";position:absolute;top:2px;left:2px;width:15px;height:15px;border-radius:50%;
+    background:#8b929c;transition:transform .16s,background .16s;
+  }
+  .check input:checked{background:#25507a}
+  .check input:checked::after{transform:translateX(15px);background:var(--accent)}
+
+  input[type=color]{
+    -webkit-appearance:none;appearance:none;border:1px solid var(--line);background:transparent;
+    width:100%;height:30px;border-radius:8px;padding:2px;cursor:pointer;
+  }
+  input[type=color]::-webkit-color-swatch-wrapper{padding:0}
+  input[type=color]::-webkit-color-swatch{border:none;border-radius:6px}
+
+  .swatches{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+  .swatches button{
+    height:30px;border-radius:8px;border:1px solid var(--line);cursor:pointer;padding:0;
+    font-size:10.5px;color:#fff;text-shadow:0 1px 2px rgba(0,0,0,.8);transition:.14s;
+  }
+  .swatches button:hover{border-color:var(--line-2);transform:translateY(-1px)}
+
+  footer{
+    flex:none;display:flex;align-items:center;gap:14px;padding:6px 14px;border-top:1px solid var(--line);
+    background:var(--panel);color:var(--muted);font-size:11.5px;font-variant-numeric:tabular-nums;
+  }
+  footer .spacer{flex:1}
+  footer .warn{color:#ffb454}
+
+  #toast{
+    position:fixed;left:50%;bottom:52px;transform:translate(-50%,12px);opacity:0;pointer-events:none;
+    background:#262b33;border:1px solid var(--line-2);border-radius:9px;padding:8px 16px;font-size:12.5px;
+    transition:.22s;z-index:50;box-shadow:0 8px 26px rgba(0,0,0,.5);
+  }
+  #toast.show{opacity:1;transform:translate(-50%,0)}
+
+  @media (max-width:860px){
+    main{flex-direction:column}
+    #panel{width:auto;height:46%;border-left:none;border-top:1px solid var(--line)}
+  }
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <div class="brand">六边形点阵<em>图片风格化</em></div>
+    <div class="spacer"></div>
+    <button class="btn" id="btnOpen">打开图片</button>
+    <button class="btn" id="btnDemo">示例图</button>
+    <button class="btn ghost" id="btnCompare" disabled>按住看原图</button>
+    <button class="btn ghost" id="btnReset">重置参数</button>
+    <button class="btn primary" id="btnExport" disabled>导出 PNG</button>
+    <input type="file" id="file" accept="image/*" hidden />
+  </header>
+
+  <main>
+    <section id="stage">
+      <canvas id="view" class="hidden"></canvas>
+      <div id="drop">
+        <div class="box">
+          <div class="big">拖入图片开始</div>
+          <div class="sub">
+            把图片拖到这里，或点击「打开图片」<br />
+            也可以直接按 <kbd>Ctrl</kbd> + <kbd>V</kbd> 粘贴剪贴板中的图片<br />
+            背景是纯色（红/绿底）的图抠得最干净
+          </div>
+        </div>
+      </div>
+    </section>
+    <aside id="panel"></aside>
+  </main>
+
+  <footer>
+    <span id="stSize">未载入图片</span>
+    <span id="stDots"></span>
+    <span id="stTime"></span>
+    <span class="spacer"></span>
+    <span id="stNote"></span>
+  </footer>
+</div>
+<div id="toast"></div>
+
+<script>
+"use strict";
+
+/* ============================ 常量 ============================ */
+
+const STORAGE_KEY = "hex-mosaic.params.v2";
+const TAU = Math.PI * 2;
+const MAX_SRC = 2200;               // 源图工作分辨率长边上限（超过先等比缩小）
+const NOISE_FLOOR = 1e-6;
+
+const PALETTES = [
+  ["石墨", "#d8d8d8", "#111214"],
+  ["LED 绿", "#7dff9b", "#0a120c"],
+  ["琥珀", "#ffbb42", "#140f06"],
+  ["冰蓝", "#8fd3ff", "#0a1018"],
+  ["纸白", "#2b2b2b", "#f2f0ea"],
+  ["霓虹粉", "#ff77c8", "#160a12"],
+];
+
+const DEFAULTS = {
+  // 抠图
+  cutout: "auto",     // auto | key | alpha | none
+  key: "#ff0000",     // 色键背景色
+  keyTol: 40,         // 色键容差
+  tol: 26,            // 自动模式：外部背景容差
+  holeTol: 6,         // 自动模式：内部缝隙容差
+  maskThresh: 128,    // mask 采样值高于此值才算角色
+  holeThresh: 128,    // 内部缝隙 mask 的判定阈值
+  noPunch: false,     // 不挖内部背景缝
+  whiteHole: -1,      // <0 关闭；>=0 时在角色内部把近白像素(色差<=N)补挖成缝
+  white: 238,         // 仅「不抠图」时生效：亮于此灰度视为背景，不画点
+  autocrop: true,
+  // 网格
+  width: 900,         // 输出宽度（设计空间）
+  cell: 11,           // 点间距（设计空间 px）
+  previewScale: 1,    // 预览倍率
+  // 形状
+  shape: "hex",       // hex | circle
+  corner: 0.16,       // 六边形圆角 0~1
+  // 明暗
+  tone: "light",      // light = 越亮点越大 | dark = 越暗点越大
+  mapMode: "size",    // size = 明暗改点大小 | shade = 明暗改点深浅
+  gamma: 0.9,
+  minRatio: 0.22,     // size 模式：最小点比例
+  shadeSize: 0.92,    // shade 模式：统一大小（占最大尺寸的比例）
+  shadeMin: 0.06,     // shade 模式：最浅
+  shadeMax: 1.0,      // shade 模式：最深
+  cutoff: 0,
+  // 颜色
+  fg: "#d9d9d9",
+  bg: "#1c1c1c",
+  transparent: false,
+  // 导出
+  exportScale: 2,
+};
+
+/* ============================ 控件定义 ============================ */
+
+const SPEC = [
+  {
+    title: "抠图", items: [
+      {
+        k: "cutout", type: "segment", label: "方式",
+        options: [["自动", "auto"], ["色键", "key"], ["透明", "alpha"], ["不抠", "none"]],
+        hint: p => ({
+          auto: "有透明通道就用它，否则按四角背景色漫水填充猜背景",
+          key: "按指定背景色抠图：与背景色差在容差内的像素一律留空，不怕白衣服和背景同色",
+          alpha: "直接用 alpha 通道当角色范围，像素级最准",
+          none: "整张图直接点阵化，背景请自行保证够暗",
+        })[p.cutout]
+      },
+      { k: "key", type: "color", label: "背景色", when: p => p.cutout === "key" },
+      {
+        type: "button", action: "pick", label: "吸管取背景色",
+        when: p => p.cutout === "key", hint: "点一下，再在画面里点背景处取色（Esc 取消）"
+      },
+      { k: "keyTol", type: "range", label: "色键容差", min: 0, max: 120, step: 1, when: p => p.cutout === "key" },
+      {
+        k: "tol", type: "range", label: "背景容差", min: 0, max: 80, step: 1,
+        when: p => p.cutout === "auto", hint: "与四角背景色的差异小于此值即算背景"
+      },
+      {
+        k: "holeTol", type: "range", label: "内部缝隙容差", min: 0, max: 40, step: 1,
+        when: p => p.cutout === "auto",
+        hint: "被角色包住的纯底色也挖空。调大会把同样发白的衣服一起挖掉，谨慎"
+      },
+      {
+        k: "noPunch", type: "check", label: "不挖内部缝隙（头发间隙会被填实）",
+        when: p => p.cutout === "auto"
+      },
+      {
+        k: "whiteHole", type: "range", label: "白洞补挖容差（-1 关闭）", min: -1, max: 24, step: 1,
+        when: p => p.cutout === "key",
+        hint: "【慎用】在角色内部把近白像素补挖成缝，只在抠图工具确实漏抠了发丝缝时才开。实测会把角色自己的白色衣服/高光一起挖掉"
+      },
+      { k: "maskThresh", type: "range", label: "前景判定阈值", min: 1, max: 254, step: 1, hint: "mask 采样值高于此值才算角色，调高可收紧边缘" },
+      {
+        k: "holeThresh", type: "range", label: "缝隙判定阈值", min: 1, max: 254, step: 1,
+        when: p => !p.noPunch && p.cutout !== "none",
+        hint: "内部缝隙 mask 采样值达到此值就留空，调低可挖掉更淡的缝"
+      },
+      {
+        k: "white", type: "range", label: "背景亮于", min: 0, max: 255, step: 1,
+        when: p => p.cutout === "none", hint: "不抠图时只能靠亮度挡背景：亮于此灰度不画点"
+      },
+      { k: "autocrop", type: "check", label: "裁掉四周空白" },
+    ]
+  },
+  {
+    title: "网格", items: [
+      { k: "width", type: "range", label: "输出宽度", min: 240, max: 2000, step: 20, unit: "px", hint: "点阵的设计分辨率，导出以此为基准" },
+      { k: "cell", type: "range", label: "点间距", min: 4, max: 64, step: 0.5, unit: "px", hint: "越小点越密。六边形最大尺寸按「内切圆 = 半个间距」算，正好密堆积；圆形最大半径 = 半个间距" },
+      {
+        k: "previewScale", type: "segment", label: "预览倍率",
+        options: [["0.5×", 0.5], ["1×", 1], ["2×", 2]],
+        hint: "只影响屏幕预览的渲染分辨率（越大越清晰、越慢）；导出始终按 输出宽度 × 导出倍率"
+      },
+    ]
+  },
+  {
+    title: "形状", items: [
+      {
+        k: "shape", type: "segment", label: "点形状",
+        options: [["六边形", "hex"], ["圆形", "circle"]]
+      },
+      {
+        k: "corner", type: "range", label: "六边形圆角", min: 0, max: 1, step: 0.01,
+        when: p => p.shape === "hex", hint: "0 = 尖角六边形，1 = 接近圆点"
+      },
+    ]
+  },
+  {
+    title: "明暗映射", items: [
+      {
+        k: "tone", type: "segment", label: "映射方向",
+        options: [["越亮越大", "light"], ["越暗越大", "dark"]],
+        hint: p => p.tone === "light" ? "白色衣服/皮肤 = 大点，暗部与线稿 = 小点" : "暗部 = 大点，亮部 = 小点"
+      },
+      {
+        k: "mapMode", type: "segment", label: "映射方式",
+        options: [["点大小", "size"], ["点深浅", "shade"]],
+        hint: p => p.mapMode === "size"
+          ? "用点的尺寸表现明暗"
+          : "所有点同尺寸，用点的明暗/不透明度表现深浅"
+      },
+      { k: "gamma", type: "range", label: "Gamma", min: 0.2, max: 3, step: 0.01, hint: "<1 让中间调更饱满" },
+      {
+        k: "minRatio", type: "range", label: "最小点比例", min: 0, max: 0.9, step: 0.01,
+        when: p => p.mapMode === "size", hint: "角色内最暗/最亮处仍保留的最小点"
+      },
+      {
+        k: "shadeSize", type: "range", label: "统一大小", min: 0.05, max: 1, step: 0.01,
+        when: p => p.mapMode === "shade", hint: "深浅模式下所有点尺寸一致"
+      },
+      {
+        k: "shadeMin", type: "range", label: "最浅", min: 0, max: 1, step: 0.01,
+        when: p => p.mapMode === "shade"
+      },
+      {
+        k: "shadeMax", type: "range", label: "最深", min: 0, max: 1, step: 0.01,
+        when: p => p.mapMode === "shade", hint: "越深越接近点颜色，越浅越接近背景色"
+      },
+      { k: "cutoff", type: "range", label: "留白阈值", min: 0, max: 0.9, step: 0.01, hint: "映射值低于它的点不画" },
+    ]
+  },
+  {
+    title: "颜色", items: [
+      { k: "fg", type: "color", label: "点颜色" },
+      { k: "bg", type: "color", label: "背景色", when: p => !p.transparent },
+      { k: "transparent", type: "check", label: "背景透明（导出带 alpha 的 PNG）" },
+      { type: "swatches", label: "配色预设" },
+    ]
+  },
+  {
+    title: "导出", items: [
+      { k: "exportScale", type: "segment", label: "导出倍率", options: [["1×", 1], ["2×", 2], ["3×", 3], ["4×", 4]] },
+    ]
+  },
+];
+
+/* ============================ 状态 ============================ */
+
+const P = Object.assign({}, DEFAULTS);
+const S = { img: null, w: 0, h: 0, hasAlpha: false, id: 0 };
+const V = { outW: 0, outH: 0, dispW: 0, dispH: 0 };
+const bind = {};
+let dragging = false;
+let dragTimer = 0;
+let rafId = 0;
+let picking = false;
+
+const $ = (sel, root = document) => root.querySelector(sel);
+const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
+
+/* ============================ 面板框架 ============================ */
+
+function fmtVal(item, v) {
+  if (item.type === "range") {
+    const dec = item.step < 0.005 ? 3 : item.step < 1 ? 2 : 0;
+    let s = Number(v).toFixed(dec);
+    if (dec) s = s.replace(/\.?0+$/, "") || "0";
+    return s + (item.unit || "");
+  }
+  return String(v);
+}
+
+/** 文案允许写成函数（随参数变化），这里统一求值 */
+const txt = v => (typeof v === "function" ? v(P) : v);
+
+const ACTIONS = {
+  pick() {
+    picking = true;
+    $("#stage").classList.add("picking");
+    toast("在画面里点一下背景取色");
+  }
+};
+
+function makeRow(item) {
+  const row = document.createElement("div");
+  row.className = "row";
+
+  if (item.type === "button") {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "btn";
+    b.style.width = "100%";
+    b.textContent = txt(item.label);
+    b.addEventListener("click", () => ACTIONS[item.action] && ACTIONS[item.action](b));
+    row.appendChild(b);
+    let hintEl = null;
+    if (item.hint) {
+      hintEl = document.createElement("div");
+      hintEl.className = "hint";
+      hintEl.textContent = txt(item.hint);
+      row.appendChild(hintEl);
+    }
+    bind["@" + item.action] = { row, item, labelEl: b, hintEl, set: null };
+    return row;
+  }
+
+  if (item.type === "check") {
+    row.className = "row check";
+    const input = document.createElement("input");
+    input.type = "checkbox";
+    const span = document.createElement("span");
+    span.textContent = txt(item.label);
+    row.append(input, span);
+    input.addEventListener("change", () => setParam(item.k, input.checked));
+    bind[item.k] = { set: v => { input.checked = !!v; }, row, item, labelEl: span };
+    return row;
+  }
+
+  const head = document.createElement("div");
+  head.className = "row-head";
+  const name = document.createElement("span");
+  name.className = "name";
+  name.textContent = txt(item.label);
+  head.appendChild(name);
+
+  if (item.type === "range") {
+    const val = document.createElement("span");
+    val.className = "val";
+    val.textContent = fmtVal(item, P[item.k]);
+    head.appendChild(val);
+
+    const input = document.createElement("input");
+    input.type = "range";
+    input.min = item.min; input.max = item.max; input.step = item.step;
+    input.value = P[item.k];
+
+    input.addEventListener("input", () => {
+      dragging = true;
+      clearTimeout(dragTimer);
+      dragTimer = setTimeout(() => { dragging = false; requestRender(); }, 220);
+      setParam(item.k, Number(input.value));
+    });
+    input.addEventListener("change", () => {
+      dragging = false;
+      clearTimeout(dragTimer);
+      requestRender();
+    });
+
+    row.append(head, input);
+    let hintEl = null;
+    if (item.hint) {
+      hintEl = document.createElement("div");
+      hintEl.className = "hint";
+      hintEl.textContent = txt(item.hint);
+      row.appendChild(hintEl);
+    }
+    bind[item.k] = {
+      set: v => { input.value = v; val.textContent = fmtVal(item, v); },
+      row, item, labelEl: name, hintEl
+    };
+    return row;
+  }
+
+  if (item.type === "segment") {
+    const seg = document.createElement("div");
+    seg.className = "seg";
+    const btns = item.options.map(([label, value]) => {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.textContent = label;
+      b.addEventListener("click", () => setParam(item.k, value));
+      seg.appendChild(b);
+      return { b, value };
+    });
+    row.append(head, seg);
+    let hintEl = null;
+    if (item.hint) {
+      hintEl = document.createElement("div");
+      hintEl.className = "hint";
+      hintEl.textContent = txt(item.hint);
+      row.appendChild(hintEl);
+    }
+    bind[item.k] = {
+      set: v => btns.forEach(({ b, value }) => b.classList.toggle("on", value === v)),
+      row, item, labelEl: name, hintEl
+    };
+    return row;
+  }
+
+  if (item.type === "color") {
+    const input = document.createElement("input");
+    input.type = "color";
+    input.value = P[item.k];
+    input.addEventListener("input", () => setParam(item.k, input.value));
+    row.append(head, input);
+    bind[item.k] = { set: v => { input.value = v; }, row, item, labelEl: name };
+    return row;
+  }
+
+  if (item.type === "swatches") {
+    const wrap = document.createElement("div");
+    wrap.className = "swatches";
+    for (const [label, fg, bg] of PALETTES) {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.textContent = label;
+      b.title = label;
+      b.style.background = `linear-gradient(135deg, ${fg} 0 50%, ${bg} 50% 100%)`;
+      b.addEventListener("click", () => {
+        P.fg = fg; P.bg = bg;
+        syncUI(); saveParams(); requestRender();
+      });
+      wrap.appendChild(b);
+    }
+    row.append(head, wrap);
+    return row;
+  }
+
+  return row;
+}
+
+function buildPanel() {
+  const panel = $("#panel");
+  const frag = document.createDocumentFragment();
+  for (const sec of SPEC) {
+    const el = document.createElement("section");
+    el.className = "sec";
+    const h = document.createElement("h3");
+    h.textContent = sec.title;
+    el.appendChild(h);
+    for (const item of sec.items) el.appendChild(makeRow(item));
+    frag.appendChild(el);
+  }
+  panel.appendChild(frag);
+}
+
+function syncUI() {
+  for (const key in bind) {
+    const b = bind[key];
+    if (b.set) b.set(b.item.k ? P[b.item.k] : undefined);
+    if (b.item.when) b.row.style.display = b.item.when(P) ? "" : "none";
+  }
+  refreshText();
+}
+
+/** 刷新随参数变化的标题与提示文案 */
+function refreshText() {
+  for (const key in bind) {
+    const b = bind[key];
+    if (b.labelEl) b.labelEl.textContent = txt(b.item.label);
+    if (b.hintEl && b.item.hint) b.hintEl.textContent = txt(b.item.hint);
+  }
+}
+
+function setParam(k, v) {
+  const prev = P[k];
+  P[k] = v;
+  if (prev !== v) invalidateSource(k);
+  const b = bind[k];
+  if (b && b.set) b.set(v);
+  for (const key in bind) {
+    const it = bind[key].item;
+    if (it.when) bind[key].row.style.display = it.when(P) ? "" : "none";
+  }
+  refreshText();
+  saveParams();
+  // 这几个参数会改变输出尺寸，需要重新排版
+  const RELAYOUT = ["width", "autocrop", "cutout", "previewScale"];
+  if (prev !== v && RELAYOUT.indexOf(k) !== -1) layoutStage();
+  else requestRender();
+}
+
+function saveParams() {
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(P)); } catch (e) { /* 忽略 */ }
+}
+
+function loadParams() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return;
+    const o = JSON.parse(raw);
+    for (const k in DEFAULTS) if (k in o) P[k] = o[k];
+  } catch (e) { /* 忽略 */ }
+}
+
+/* ============================ 抠图 ============================ */
+
+/* 源图与抠图结果缓存 */
+const SRC = { key: "", rgba: null, mask: null, holes: null, w: 0, h: 0, mode: "", crop: null };
+
+function invalidateSource(changedKey) {
+  // 只有影响「源图解析 / 抠图 / 裁边」的参数才需要重算，颜色之类的不必
+  const SRC_KEYS = ["cutout", "key", "keyTol", "tol", "holeTol", "noPunch", "whiteHole", "autocrop"];
+  if (changedKey && SRC_KEYS.indexOf(changedKey) === -1) return;
+  SRC.key = "";
+  VIEW.key = "";
+}
+
+const hexToRgb = hex => [parseInt(hex.slice(1, 3), 16), parseInt(hex.slice(3, 5), 16), parseInt(hex.slice(5, 7), 16)];
+const rgbToHex = c => "#" + c.map(v => clamp(Math.round(v), 0, 255).toString(16).padStart(2, "0")).join("");
+/* 与 ImageChops.difference().convert("L") 一致的加权色差 */
+const colorDiff = (r1, g1, b1, r2, g2, b2) =>
+  0.299 * Math.abs(r1 - r2) + 0.587 * Math.abs(g1 - g2) + 0.114 * Math.abs(b1 - b2);
+
+/** 取四角小块的中位色作为背景参考色 */
+function cornerColor(rgba, w, h, patch = 6) {
+  const samples = [];
+  const corners = [[0, 0], [w - 1, 0], [0, h - 1], [w - 1, h - 1]];
+  for (const [cx, cy] of corners) {
+    for (let dy = -patch; dy <= patch; dy++) {
+      for (let dx = -patch; dx <= patch; dx++) {
+        const x = clamp(cx + dx, 0, w - 1);
+        const y = clamp(cy + dy, 0, h - 1);
+        samples.push([y * w + x]);
+      }
+    }
+  }
+  const lum = i => rgba[i * 4] + rgba[i * 4 + 1] + rgba[i * 4 + 2];
+  samples.sort((a, b) => lum(a[0]) - lum(b[0]));
+  const i = samples[samples.length >> 1][0];
+  return [rgba[i * 4], rgba[i * 4 + 1], rgba[i * 4 + 2]];
+}
+
+/** 3×3 中值滤波，去孤立噪点（只在色键/自动模式用） */
+function median3(src, w, h) {
+  const out = new Uint8Array(w * h);
+  for (let y = 0; y < h; y++) {
+    const y0 = y > 0 ? y - 1 : 0, y1 = y < h - 1 ? y + 1 : h - 1;
+    for (let x = 0; x < w; x++) {
+      const x0 = x > 0 ? x - 1 : 0, x1 = x < w - 1 ? x + 1 : w - 1;
+      const v = [
+        src[y0 * w + x0], src[y0 * w + x], src[y0 * w + x1],
+        src[y * w + x0], src[y * w + x], src[y * w + x1],
+        src[y1 * w + x0], src[y1 * w + x], src[y1 * w + x1],
+      ];
+      // 插入排序取中位
+      for (let i = 1; i < 9; i++) {
+        const t = v[i];
+        let j = i - 1;
+        while (j >= 0 && v[j] > t) { v[j + 1] = v[j]; j--; }
+        v[j + 1] = t;
+      }
+      out[y * w + x] = v[4];
+    }
+  }
+  return out;
+}
+
+/** 扫描线漫水填充：标出所有与画面边框连通的候选像素 */
+function floodBorder(cand, w, h) {
+  const filled = new Uint8Array(w * h);
+  const stack = [];
+  for (let x = 0; x < w; x++) {
+    if (cand[x]) stack.push(x, 0);
+    if (cand[(h - 1) * w + x]) stack.push(x, h - 1);
+  }
+  for (let y = 0; y < h; y++) {
+    if (cand[y * w]) stack.push(0, y);
+    if (cand[y * w + w - 1]) stack.push(w - 1, y);
+  }
+
+  while (stack.length) {
+    const y = stack.pop();
+    const x = stack.pop();
+    const row = y * w;
+    if (filled[row + x] || !cand[row + x]) continue;
+    let xl = x;
+    while (xl > 0 && cand[row + xl - 1] && !filled[row + xl - 1]) xl--;
+    let xr = x;
+    while (xr < w - 1 && cand[row + xr + 1] && !filled[row + xr + 1]) xr++;
+    for (let i = xl; i <= xr; i++) filled[row + i] = 1;
+    for (let ny = y - 1; ny <= y + 1; ny += 2) {
+      if (ny < 0 || ny >= h) continue;
+      const nrow = ny * w;
+      let i = xl;
+      while (i <= xr) {
+        if (cand[nrow + i] && !filled[nrow + i]) {
+          stack.push(i, ny);
+          while (i <= xr && cand[nrow + i]) i++;
+        }
+        i++;
+      }
+    }
+  }
+  return filled;
+}
+
+/* 与 Pillow 的 MedianFilter(3) + GaussianBlur(0.6) 对齐：先中值滤掉孤立噪点，再做一次
+ * 分离式高斯(σ=0.6)轻度羽化，避免边缘硬切。中值只在 mask 上做，不预先采样，才能保住
+ * 发丝那样只有一两像素宽的细节（先缩到降采样网格再滤波会把它们整段抹掉）。 */
+const BLUR_R = 0.6;
+const BLUR_KERNEL = (() => {
+  const rad = Math.ceil(BLUR_R * 3);
+  const sig2 = 2 * BLUR_R * BLUR_R;
+  const k = new Float32Array(2 * rad + 1);
+  let sum = 0;
+  for (let i = -rad; i <= rad; i++) {
+    const v = Math.exp(-(i * i) / sig2);
+    k[i + rad] = v;
+    sum += v;
+  }
+  for (let i = 0; i < k.length; i++) k[i] /= sum;
+  return k;
+})();
+
+function blurSmall(src, w, h) {
+  const rad = (BLUR_KERNEL.length - 1) >> 1;
+  const tmp = new Float32Array(w * h);
+  const out = new Uint8ClampedArray(w * h);
+  for (let y = 0; y < h; y++) {
+    const row = y * w;
+    for (let x = 0; x < w; x++) {
+      let acc = 0;
+      for (let i = -rad; i <= rad; i++) {
+        const xx = x + i;
+        if (xx < 0 || xx >= w) continue;
+        acc += src[row + xx] * BLUR_KERNEL[i + rad];
+      }
+      tmp[row + x] = acc;
+    }
+  }
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      let acc = 0;
+      for (let i = -rad; i <= rad; i++) {
+        const yy = y + i;
+        if (yy < 0 || yy >= h) continue;
+        acc += tmp[yy * w + x] * BLUR_KERNEL[i + rad];
+      }
+      out[y * w + x] = acc;
+    }
+  }
+  return out;
+}
+
+/** 中值 + 羽化，与 Python 的 MedianFilter(3).filter(GaussianBlur(0.6)) 等价 */
+const smoother = (m, w, h) => blurSmall(median3(m, w, h), w, h);
+
+/** alpha 通道当角色 mask —— 透明抠图是像素级精确的，不需要任何猜测 */
+const maskFromAlpha = (rgba, w, h) => {
+  const m = new Uint8Array(w * h);
+  for (let i = 0, n = w * h; i < n; i++) m[i] = rgba[i * 4 + 3];
+  return smoother(m, w, h);
+};
+
+/**
+ * 色差 → 前景 mask：与 key 色差 <= tol 的像素一律算背景。
+ * 有了明确的背景色就不需要漫水填充，也不用担心「白衣服和底色同色」。
+ */
+function maskFromKey(rgba, w, h, key, tol) {
+  const [kr, kg, kb] = key;
+  const diff = new Uint8Array(w * h);
+  for (let i = 0, n = w * h; i < n; i++) {
+    const o = i * 4;
+    diff[i] = clamp(colorDiff(rgba[o], rgba[o + 1], rgba[o + 2], kr, kg, kb), 0, 255);
+  }
+  const m = new Uint8Array(w * h);
+  for (let i = 0; i < w * h; i++) m[i] = diff[i] > tol ? 255 : 0;
+  return smoother(m, w, h);
+}
+
+/** 角色范围内残留的近白区域（抠图工具没抠掉的背景缝） */
+function maskFromWhiteHoles(rgba, w, h, tol) {
+  const diff = new Uint8Array(w * h);
+  for (let i = 0, n = w * h; i < n; i++) {
+    const o = i * 4;
+    diff[i] = clamp(colorDiff(rgba[o], rgba[o + 1], rgba[o + 2], 255, 255, 255), 0, 255);
+  }
+  const m = new Uint8Array(w * h);
+  for (let i = 0; i < w * h; i++) m[i] = diff[i] <= tol ? 255 : 0;
+  return smoother(m, w, h);
+}
+
+/**
+ * 自动模式：四角中位色当背景参考色，与边框连通的纯色像素是外部背景，
+ * 没连通上的纯色像素就是角色内部的缝（头发间隙、腋下/裙摆透出的底色）。
+ * 返回 { mask, holes }，holes 为 null 表示不挖。
+ */
+function masksFromFlood(rgba, w, h, tol, holeTol, punch) {
+  const base = cornerColor(rgba, w, h);
+  const diff = new Uint8Array(w * h);
+  for (let i = 0, n = w * h; i < n; i++) {
+    const o = i * 4;
+    diff[i] = clamp(colorDiff(rgba[o], rgba[o + 1], rgba[o + 2], base[0], base[1], base[2]), 0, 255);
+  }
+
+  const cand = new Uint8Array(w * h);
+  for (let i = 0; i < w * h; i++) cand[i] = diff[i] <= tol ? 1 : 0;
+  const outside = floodBorder(cand, w, h);
+
+  const fg = new Uint8Array(w * h);
+  for (let i = 0; i < w * h; i++) fg[i] = outside[i] ? 0 : 255;
+  const mask = smoother(fg, w, h);
+  if (!punch) return { mask, holes: null };
+
+  // 内部缝隙用更严的容差单独判定：纯背景色(差<=holeTol)才算缝，偏灰的白（衣服、阴影）进不来
+  const hm = new Uint8Array(w * h);
+  for (let i = 0; i < w * h; i++) hm[i] = !outside[i] && diff[i] <= holeTol ? 255 : 0;
+  return { mask, holes: smoother(hm, w, h) };
+}
+
+function maskBBox(mask, w, h, margin = 0.02) {
+  let minx = w, miny = h, maxx = -1, maxy = -1;
+  for (let y = 0; y < h; y++) {
+    const row = y * w;
+    for (let x = 0; x < w; x++) {
+      if (mask[row + x] < 128) continue;
+      if (x < minx) minx = x;
+      if (x > maxx) maxx = x;
+      if (y < miny) miny = y;
+      if (y > maxy) maxy = y;
+    }
+  }
+  if (maxx < 0) return { x: 0, y: 0, w, h };
+  const px = Math.round((maxx - minx + 1) * margin);
+  const py = Math.round((maxy - miny + 1) * margin);
+  const x0 = Math.max(0, minx - px), y0 = Math.max(0, miny - py);
+  const x1 = Math.min(w, maxx + 1 + px), y1 = Math.min(h, maxy + 1 + py);
+  return { x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
+}
+
+/** 把原图读成像素数据，并按当前参数算出 mask 与裁切框（结果缓存） */
+function getSource() {
+  const key = [S.id, P.cutout, P.key, P.keyTol, P.tol, P.holeTol, P.noPunch, P.whiteHole].join("|");
+  if (SRC.key === key) return SRC;
+
+  const w = S.w, h = S.h;
+  const c = document.createElement("canvas");
+  c.width = w; c.height = h;
+  const x = c.getContext("2d", { willReadFrequently: true });
+  x.imageSmoothingEnabled = true;
+  x.drawImage(S.img, 0, 0, w, h);
+  const rgba = x.getImageData(0, 0, w, h).data;
+
+  let mask, holes = null, mode;
+  if (P.cutout === "none") {
+    mode = "none";
+    mask = new Uint8Array(w * h).fill(255);
+  } else if (P.cutout === "alpha" || (P.cutout === "auto" && S.hasAlpha)) {
+    mode = "alpha";
+    mask = maskFromAlpha(rgba, w, h);
+  } else if (P.cutout === "key") {
+    mode = "key";
+    mask = maskFromKey(rgba, w, h, hexToRgb(P.key), P.keyTol);
+    if (P.whiteHole >= 0) {
+      mode = "key+white";
+      const near = maskFromWhiteHoles(rgba, w, h, P.whiteHole);
+      holes = new Uint8Array(w * h);
+      for (let i = 0, n = w * h; i < n; i++) holes[i] = (near[i] * mask[i]) / 255;
+    }
+  } else {
+    mode = "auto";
+    ({ mask, holes } = masksFromFlood(rgba, w, h, P.tol, P.holeTol, !P.noPunch));
+  }
+
+  const crop = P.autocrop ? maskBBox(mask, w, h) : { x: 0, y: 0, w, h };
+  Object.assign(SRC, { key, rgba, mask, holes, w, h, mode, crop, canvas: c, _mc: null, _hc: null });
+  VIEW.key = "";
+  return SRC;
+}
+
+/* ============================ 采样视图 ============================ */
+
+const VIEW = { key: "", gray: null, mask: null, holes: null, w: 0, h: 0, lo: 0, hi: 0 };
+
+/** 把 8 位灰度数组包成 canvas，供 drawImage 做高质量缩放 */
+function grayCanvas(bytes, w, h, cache, prop) {
+  if (!cache[prop]) {
+    const c = document.createElement("canvas");
+    c.width = w; c.height = h;
+    const x = c.getContext("2d", { willReadFrequently: true });
+    const id = x.createImageData(w, h);
+    const d = id.data;
+    for (let i = 0, n = w * h; i < n; i++) {
+      const o = i * 4;
+      d[o] = d[o + 1] = d[o + 2] = bytes[i];
+      d[o + 3] = 255;
+    }
+    x.putImageData(id, 0, 0);
+    cache[prop] = c;
+  }
+  return cache[prop];
+}
+
+const maskCanvasOf = src => grayCanvas(src.mask, src.w, src.h, src, "_mc");
+const holesCanvasOf = src => (src.holes ? grayCanvas(src.holes, src.w, src.h, src, "_hc") : null);
+
+function medianFromHist(hist, tot, p) {
+  const target = tot * p;
+  let acc = 0;
+  for (let v = 0; v < 256; v++) {
+    acc += hist[v];
+    if (acc >= target) return v;
+  }
+  return 255;
+}
+
+/**
+ * 把源图缩到 W×H，并按点间距做一次高斯模糊当邻域平均；
+ * 同时得到同尺寸的 mask，并按 mask 统计色阶范围。
+ */
+function getView(W, H, cell, white) {
+  const key = [SRC.key, W, H, cell.toFixed(2), white].join("|");
+  if (VIEW.key === key) return VIEW;
+
+  const src = getSource();
+  const { crop } = src;
+  const r = Math.max(0.5, cell * 0.5);
+  const pad = Math.ceil(r * 3);
+
+  // --- 灰度：带外扩绘制，避免模糊在边缘把画面拉黑 ---
+  const gc = document.createElement("canvas");
+  gc.width = W; gc.height = H;
+  const gx = gc.getContext("2d", { willReadFrequently: true });
+  gx.filter = `blur(${r}px)`;
+  const ex = pad * crop.w / W, ey = pad * crop.h / H;
+  gx.drawImage(src.canvas, crop.x - ex, crop.y - ey, crop.w + 2 * ex, crop.h + 2 * ey,
+    -pad, -pad, W + 2 * pad, H + 2 * pad);
+  gx.filter = "none";
+  const gd = gx.getImageData(0, 0, W, H).data;
+  const gray = new Uint8Array(W * H);
+  for (let i = 0, n = W * H; i < n; i++) {
+    const o = i * 4;
+    gray[i] = (0.2126 * gd[o] + 0.7152 * gd[o + 1] + 0.0722 * gd[o + 2]) | 0;
+  }
+
+  // --- mask：同一变换，不模糊，让缩放自带一点软边 ---
+  // 采样网格通常比源图稀疏（降采样），这里取的是格点邻域的均值，与 Python 把
+  // mask 缩放到网格尺寸后再按 mask_thresh 采样等价。注意不要上采样，否则
+  // 发丝那样一像素宽的缝会被插值糊掉，采样值落在阈值两侧就可能整条丢失。
+  const downW = W <= crop.w, downH = H <= crop.h;
+  const mc = document.createElement("canvas");
+  mc.width = W; mc.height = H;
+  const mx = mc.getContext("2d", { willReadFrequently: true });
+  mx.imageSmoothingEnabled = downW && downH;
+  mx.imageSmoothingQuality = "high";
+  mx.drawImage(maskCanvasOf(src), crop.x, crop.y, crop.w, crop.h, 0, 0, W, H);
+  const md = mx.getImageData(0, 0, W, H).data;
+  const mask = new Uint8Array(W * H);
+  for (let i = 0, n = W * H; i < n; i++) mask[i] = md[i * 4];
+
+  // --- 内部缝隙：同一变换，同样只在降采样时插值 ---
+  let holesView = null;
+  const hc = holesCanvasOf(src);
+  if (hc) {
+    const hcv = document.createElement("canvas");
+    hcv.width = W; hcv.height = H;
+    const hx = hcv.getContext("2d", { willReadFrequently: true });
+    hx.imageSmoothingEnabled = downW && downH;
+    hx.imageSmoothingQuality = "high";
+    hx.drawImage(hc, crop.x, crop.y, crop.w, crop.h, 0, 0, W, H);
+    const hd = hx.getImageData(0, 0, W, H).data;
+    holesView = new Uint8Array(W * H);
+    for (let i = 0, n = W * H; i < n; i++) holesView[i] = hd[i * 4];
+  }
+
+  // --- 色阶：只统计角色像素的 0.5% ~ 99.5% 分位 ---
+  // 不抠图时没有 mask 可用，只能拿「比 white 暗」的像素当角色参与统计
+  const noMask = src.mode === "none";
+  const hist = new Uint32Array(256);
+  let tot = 0;
+  for (let i = 0, n = W * H; i < n; i++) {
+    if (noMask) {
+      if (gray[i] >= white) continue;
+    } else if (mask[i] < 128) continue;
+    hist[gray[i]]++;
+    tot++;
+  }
+  let lo = 0, hi = 255;
+  if (tot > 0) {
+    lo = medianFromHist(hist, tot, 0.005);
+    hi = medianFromHist(hist, tot, 0.995);
+    if (hi - lo < 8) hi = Math.min(255, lo + 8);
+  }
+
+  Object.assign(VIEW, { key, gray, mask, holes: holesView, w: W, h: H, lo, hi });
+  return VIEW;
+}
+
+/* ============================ 形状 ============================ */
+
+/*
+ * 尖顶六边形（顶点在 90°/150°/…），坐标为单位外接半径，按 round 做顶点圆角。
+ * 行列排布是 rowStep = 间距×√3/2、奇数行错半格的三角格，最近的 6 个邻居分别在
+ * 0°/60°/… 方向 —— 也就是六条边中点的方向，所以顶点必须落在 30°+60°k，才是密堆积。
+ * 返回命令表而不是 Path2D，避免每个点都新建路径对象。
+ */
+const hexCache = new Map();
+
+function hexCommands(round) {
+  const key = round.toFixed(3);
+  if (hexCache.has(key)) return hexCache.get(key);
+
+  const k = clamp(round, 0, 1) * 0.5;
+  const pts = [];
+  for (let i = 0; i < 6; i++) {
+    const a = i * Math.PI / 3 + Math.PI / 2;
+    pts.push([Math.cos(a), Math.sin(a)]);
+  }
+  const lerp = (u, v, t) => [u[0] + (v[0] - u[0]) * t, u[1] + (v[1] - u[1]) * t];
+
+  const cmds = [];
+  if (k < 0.004) {
+    cmds.push(["M", pts[0][0], pts[0][1]]);
+    for (let i = 1; i < 6; i++) cmds.push(["L", pts[i][0], pts[i][1]]);
+  } else {
+    const start = lerp(pts[5], pts[0], 1 - k);
+    cmds.push(["M", start[0], start[1]]);
+    for (let i = 0; i < 6; i++) {
+      const cur = pts[i], nxt = pts[(i + 1) % 6];
+      const a1 = lerp(cur, nxt, k);
+      const a2 = lerp(cur, nxt, 1 - k);
+      cmds.push(["L", a1[0], a1[1]]);
+      cmds.push(["Q", nxt[0], nxt[1], a2[0], a2[1]]);
+    }
+  }
+  hexCache.set(key, cmds);
+  return cmds;
+}
+
+function emitDot(path, cmds, x, y, rad) {
+  for (let i = 0; i < cmds.length; i++) {
+    const c = cmds[i];
+    if (c[0] === "M") path.moveTo(x + c[1] * rad, y + c[2] * rad);
+    else if (c[0] === "L") path.lineTo(x + c[1] * rad, y + c[2] * rad);
+    else path.quadraticCurveTo(x + c[1] * rad, y + c[2] * rad, x + c[3] * rad, y + c[4] * rad);
+  }
+  path.closePath();
+}
+
+/* ============================ 渲染 ============================ */
+
+const SHADE_BUCKETS = 24;
+
+function renderEffect(ctx, W, H, cell, opts) {
+  const t0 = performance.now();
+  const view = getView(W, H, cell, opts.white);
+  const { gray, mask, holes, lo, hi } = view;
+  const span = Math.max(1, hi - lo);
+  const noMask = SRC.mode === "none";
+
+  // 六边形密排：奇数行横向错半格
+  const rowStep = cell * Math.sqrt(3) / 2;
+  const cols = Math.max(1, Math.floor(W / cell));
+  const rows = Math.max(1, Math.floor((H - 2) / rowStep));
+  const padX = (W - cols * cell + cell) / 2;
+  const padY = (H - (rows - 1) * rowStep) / 2;
+
+  const useHex = opts.shape !== "circle";
+  // 六边形按「内切圆半径 = 半个间距」定尺寸（外接半径 = 间距/√3）：这样 6 个方向的
+  // 邻居都正好共用一条边，才是真正的密堆积；圆形半径最大为间距的一半即可
+  const rMax = (useHex ? cell / Math.sqrt(3) : cell * 0.5) * 0.97;
+  const rMin = rMax * opts.minRatio;
+  const pow = opts.gamma;
+  const light = opts.tone === "light";
+  const shadeMode = opts.mapMode === "shade";
+  const hexCmds = hexCommands(opts.corner);
+  const emit = useHex
+    ? (p, x, y, rad) => emitDot(p, hexCmds, x, y, rad)
+    : (p, x, y, rad) => { p.moveTo(x + rad, y); p.arc(x, y, rad, 0, TAU); };
+
+  // 深浅模式：所有点同尺寸，按不透明度分层；大小模式：单一不透明路径
+  const buckets = shadeMode ? SHADE_BUCKETS : 1;
+  const paths = [];
+  for (let k = 0; k < buckets; k++) paths.push(new Path2D());
+
+  let cells = 0, drawn = 0, fgPixels = 0, punched = 0;
+
+  for (let r = 0; r < rows; r++) {
+    const y = padY + r * rowStep;
+    const n = (r & 1) ? cols - 1 : cols;
+    const off = (r & 1) ? cell / 2 : 0;
+    const gy = Math.min(H - 1, Math.max(0, y | 0));
+    const row = gy * W;
+    for (let c = 0; c < n; c++) {
+      cells++;
+      const x = padX + off + c * cell;
+      const gxi = Math.min(W - 1, Math.max(0, x | 0));
+      const i = row + gxi;
+      const v = gray[i];
+      if (noMask) {
+        if (v >= opts.white) continue;           // 没抠图时只能靠亮度挡掉背景
+      } else if (mask[i] < opts.maskThresh) {
+        continue;                                // 背景：一个点都不画
+      }
+      fgPixels++;
+      if (holes && holes[i] >= opts.holeThresh) { punched++; continue; } // 内部缝隙：留空
+      let t = light ? (v - lo) / span : (hi - v) / span;
+      t = t < 0 ? 0 : t > 1 ? 1 : t;
+      t = Math.pow(t, pow);
+      if (t < opts.cutoff) continue;
+
+      let rad;
+      let bucket = 0;
+      if (shadeMode) {
+        bucket = Math.min(buckets - 1, Math.round(t * (buckets - 1)));
+        rad = rMax * opts.shadeSize;
+      } else {
+        rad = rMin + (rMax - rMin) * t;
+      }
+      if (rad < 0.35) continue;
+
+      emit(paths[bucket], x, y, rad);
+      drawn++;
+    }
+  }
+
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.globalCompositeOperation = "source-over";
+  ctx.globalAlpha = 1;
+  ctx.clearRect(0, 0, W, H);
+  if (!opts.transparent) {
+    ctx.fillStyle = opts.bg;
+    ctx.fillRect(0, 0, W, H);
+  }
+  ctx.fillStyle = opts.fg;
+  if (shadeMode) {
+    const lo2 = opts.shadeMin, hi2 = opts.shadeMax;
+    for (let k = 0; k < buckets; k++) {
+      // 不透明度表达深浅：与背景合成后正好落在 背景色 ↔ 点颜色 之间
+      ctx.globalAlpha = clamp(lo2 + (hi2 - lo2) * (k / (buckets - 1)), 0, 1);
+      ctx.fill(paths[k]);
+    }
+    ctx.globalAlpha = 1;
+  } else {
+    ctx.fill(paths[0]);
+  }
+
+  return { cells, drawn, fgPixels, punched, ms: performance.now() - t0 };
+}
+
+/* ============================ 视图与调度 ============================ */
+
+function requestRender() {
+  if (rafId) return;
+  rafId = requestAnimationFrame(() => { rafId = 0; renderPreview(); });
+}
+
+/** 输出尺寸（设计空间）由输出宽度、预览倍率与裁切后的长宽比决定 */
+function designSize() {
+  const src = getSource();
+  const { crop } = src;
+  const w = Math.max(120, Math.round(P.width * P.previewScale));
+  return { outW: w, outH: Math.max(1, Math.round(w * crop.h / crop.w)) };
+}
+
+function layoutStage() {
+  if (!S.img) return;
+  const d = designSize();
+  V.outW = d.outW; V.outH = d.outH;
+
+  const stage = $("#stage").getBoundingClientRect();
+  const pad = 32;
+  const fit = Math.min((stage.width - pad) / V.outW, (stage.height - pad) / V.outH);
+  V.dispW = Math.max(1, Math.floor(V.outW * fit));
+  V.dispH = Math.max(1, Math.floor(V.outH * fit));
+
+  const cv = $("#view");
+  cv.style.width = V.dispW + "px";
+  cv.style.height = V.dispH + "px";
+  requestRender();
+}
+
+function renderPreview() {
+  if (!S.img) return;
+  const cv = $("#view");
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  const q = dragging ? 0.6 : 1;
+  const W = Math.max(2, Math.round(V.dispW * dpr * q));
+  const H = Math.max(2, Math.round(V.dispH * dpr * q));
+  cv.width = W; cv.height = H;
+
+  const res = renderEffect(cv.getContext("2d"), W, H, P.cell * (W / V.outW), P);
+
+  const src = getSource();
+  $("#stSize").textContent = `输出 ${V.outW} × ${V.outH}`;
+  $("#stDots").textContent = `点阵 ${res.drawn.toLocaleString()}` +
+    (res.punched ? ` · 缝隙留空 ${res.punched.toLocaleString()}` : "");
+  $("#stTime").textContent = `${res.ms.toFixed(0)} ms`;
+
+  const note = $("#stNote");
+  const modeName = { auto: "自动", key: "色键", "key+white": "色键+白洞", alpha: "透明通道", none: "不抠图" }[src.mode];
+  if (res.fgPixels === 0 && src.mode !== "none") {
+    note.className = "warn";
+    note.textContent = "没抠出任何前景，检查容差 / 换个抠图方式";
+  } else if (res.drawn > 260000) {
+    note.className = "warn";
+    note.textContent = "点阵过密，建议加大点间距";
+  } else {
+    note.className = "";
+    note.textContent = src.mode === "key" || src.mode === "key+white"
+      ? `抠图：${modeName} ${P.key}（容差 ${P.keyTol}）` + (P.autocrop ? "，已裁边" : "")
+      : `抠图：${modeName}` + (P.autocrop ? "，已裁边" : "");
+  }
+}
+
+/* ============================ 图片载入 ============================ */
+
+function setImage(img) {
+  S.img = img;
+  S.id++;
+  const nw = img.naturalWidth || img.width;
+  const nh = img.naturalHeight || img.height;
+  const cap = Math.min(1, MAX_SRC / Math.max(nw, nh));
+  S.w = Math.max(1, Math.round(nw * cap));
+  S.h = Math.max(1, Math.round(nh * cap));
+
+  // 透明通道探测 + 默认取四角背景色当色键
+  const c = document.createElement("canvas");
+  c.width = S.w; c.height = S.h;
+  const x = c.getContext("2d", { willReadFrequently: true });
+  x.drawImage(img, 0, 0, S.w, S.h);
+  const d = x.getImageData(0, 0, S.w, S.h).data;
+  let minA = 255;
+  for (let i = 3, n = S.w * S.h * 4; i < n; i += 4) if (d[i] < minA) { minA = d[i]; if (minA === 0) break; }
+  S.hasAlpha = minA < 250;
+  if (!S.hasAlpha) {
+    const base = cornerColor(d, S.w, S.h);
+    P.key = rgbToHex(base);
+  }
+
+  invalidateSource("src");
+  VIEW.key = "";
+
+  $("#drop").classList.add("hide");
+  $("#view").classList.remove("hidden");
+  $("#btnExport").disabled = false;
+  $("#btnCompare").disabled = false;
+
+  syncUI();
+  saveParams();
+  layoutStage();
+  toast(S.hasAlpha ? "已载入（检测到透明通道）" : `已载入，背景色取为 ${P.key}`);
+}
+
+function loadBlob(blob) {
+  // 用 data URL 而非 blob URL，避免 file:// 下 canvas 被标记为跨域而无法 getImageData
+  const fr = new FileReader();
+  fr.onload = () => {
+    const img = new Image();
+    img.onload = () => setImage(img);
+    img.onerror = () => toast("图片载入失败");
+    img.src = fr.result;
+  };
+  fr.onerror = () => toast("图片读取失败");
+  fr.readAsDataURL(blob);
+}
+
+function loadFile(file) {
+  if (!file) return;
+  if (!/^image\//.test(file.type)) { toast("请选择图片文件"); return; }
+  loadBlob(file);
+}
+
+function demoImage() {
+  const c = document.createElement("canvas");
+  c.width = 900; c.height = 900;
+  const x = c.getContext("2d");
+
+  // 红底：演示色键抠图
+  x.fillStyle = "#ff0000";
+  x.fillRect(0, 0, 900, 900);
+
+  // 披肩长发
+  x.fillStyle = "#2f3442";
+  x.beginPath();
+  x.moveTo(250, 300);
+  x.bezierCurveTo(240, 120, 400, 60, 470, 62);
+  x.bezierCurveTo(620, 66, 690, 170, 668, 330);
+  x.bezierCurveTo(700, 520, 700, 700, 660, 900);
+  x.lineTo(300, 900);
+  x.bezierCurveTo(250, 700, 236, 480, 250, 300);
+  x.closePath();
+  x.fill();
+
+  // 脸
+  x.fillStyle = "#f6e4d6";
+  x.beginPath();
+  x.ellipse(462, 380, 118, 148, 0, 0, TAU);
+  x.fill();
+
+  // 刘海
+  x.fillStyle = "#3a4052";
+  x.beginPath();
+  x.moveTo(336, 372);
+  x.bezierCurveTo(320, 210, 430, 168, 480, 176);
+  x.bezierCurveTo(596, 196, 610, 300, 592, 396);
+  x.bezierCurveTo(560, 300, 520, 262, 470, 268);
+  x.bezierCurveTo(404, 276, 356, 320, 336, 372);
+  x.closePath();
+  x.fill();
+
+  // 眼睛
+  x.fillStyle = "#20242e";
+  x.beginPath(); x.ellipse(408, 400, 26, 34, -0.12, 0, TAU); x.fill();
+  x.beginPath(); x.ellipse(516, 400, 26, 34, 0.12, 0, TAU); x.fill();
+
+  // 白色连衣裙（纯白，用来验证「白衣服不会和背景一起消失」）
+  x.fillStyle = "#ffffff";
+  x.beginPath();
+  x.moveTo(310, 900);
+  x.bezierCurveTo(320, 690, 380, 610, 462, 600);
+  x.bezierCurveTo(548, 610, 606, 692, 616, 900);
+  x.closePath();
+  x.fill();
+
+  // 肩部荷叶边
+  x.fillStyle = "#ffffff";
+  for (let i = 0; i < 11; i++) {
+    const a = Math.PI + i * Math.PI / 10;
+    x.beginPath();
+    x.arc(462 + Math.cos(a) * 150, 610 + Math.sin(a) * 44, 26, 0, TAU);
+    x.fill();
+  }
+
+  // 发饰
+  x.fillStyle = "#f6e9c8";
+  for (let i = 0; i < 12; i++) {
+    const a = i * Math.PI / 6;
+    x.save();
+    x.translate(612, 232);
+    x.rotate(a);
+    x.beginPath();
+    x.moveTo(0, 0); x.lineTo(20, -7); x.lineTo(42, 0); x.lineTo(20, 7);
+    x.closePath(); x.fill();
+    x.restore();
+  }
+
+  const img = new Image();
+  img.onload = () => setImage(img);
+  img.src = c.toDataURL("image/png");
+}
+
+/* ============================ 导出 ============================ */
+
+function exportPng() {
+  if (!S.img) return;
+  const k = P.exportScale;
+  const d = designSize();
+  const W = Math.round(d.outW * k);
+  const H = Math.round(d.outH * k);
+
+  $("#stNote").className = "";
+  $("#stNote").textContent = "导出中…";
+
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    const cv = document.createElement("canvas");
+    cv.width = W; cv.height = H;
+    renderEffect(cv.getContext("2d"), W, H, P.cell * k, P);
+
+    cv.toBlob(blob => {
+      if (!blob) { toast("导出失败"); return; }
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = `hex-mosaic-${W}x${H}.png`;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+      toast(`已导出 ${W} × ${H} PNG`);
+      $("#stNote").textContent = "";
+    }, "image/png");
+  }));
+}
+
+/* ============================ 提示 ============================ */
+
+let toastTimer = 0;
+function toast(msg) {
+  const el = $("#toast");
+  el.textContent = msg;
+  el.classList.add("show");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove("show"), 1800);
+}
+
+/* ============================ 吸管 ============================ */
+
+function finishPick() {
+  picking = false;
+  $("#stage").classList.remove("picking");
+}
+
+function pickAt(clientX, clientY) {
+  const cv = $("#view");
+  const rect = cv.getBoundingClientRect();
+  if (!rect.width || !rect.height) return;
+  const fx = clamp((clientX - rect.left) / rect.width, 0, 1);
+  const fy = clamp((clientY - rect.top) / rect.height, 0, 1);
+
+  const src = getSource();
+  const sx = clamp(Math.round(src.crop.x + fx * src.crop.w), 0, src.w - 1);
+  const sy = clamp(Math.round(src.crop.y + fy * src.crop.h), 0, src.h - 1);
+  const o = (sy * src.w + sx) * 4;
+  const hex = rgbToHex([src.rgba[o], src.rgba[o + 1], src.rgba[o + 2]]);
+
+  P.cutout = "key";
+  P.key = hex;
+  invalidateSource("cutout");
+  syncUI();
+  saveParams();
+  requestRender();
+  toast(`背景色取为 ${hex}`);
+}
+
+/* ============================ 事件绑定 ============================ */
+
+function initEvents() {
+  $("#btnOpen").addEventListener("click", () => $("#file").click());
+  $("#stage").addEventListener("click", e => {
+    if (picking) { pickAt(e.clientX, e.clientY); finishPick(); return; }
+    if (!S.img && !e.target.closest("button")) $("#file").click();
+  });
+  $("#file").addEventListener("change", e => {
+    loadFile(e.target.files && e.target.files[0]);
+    e.target.value = "";
+  });
+  $("#btnDemo").addEventListener("click", demoImage);
+  $("#btnExport").addEventListener("click", exportPng);
+
+  $("#btnReset").addEventListener("click", () => {
+    Object.assign(P, DEFAULTS);
+    invalidateSource("cutout");
+    syncUI();
+    saveParams();
+    layoutStage();
+    toast("参数已重置");
+  });
+
+  const btnCompare = $("#btnCompare");
+  const showOriginal = on => {
+    const cv = $("#view");
+    if (!S.img) return;
+    if (on) {
+      cv.style.width = V.dispW + "px";
+      cv.style.height = V.dispH + "px";
+      const src = getSource();
+      cv.width = V.dispW; cv.height = V.dispH;
+      const ctx = cv.getContext("2d");
+      ctx.fillStyle = P.bg;
+      ctx.fillRect(0, 0, V.dispW, V.dispH);
+      ctx.drawImage(src.canvas, src.crop.x, src.crop.y, src.crop.w, src.crop.h, 0, 0, V.dispW, V.dispH);
+    } else {
+      requestRender();
+    }
+  };
+  btnCompare.addEventListener("mousedown", () => showOriginal(true));
+  btnCompare.addEventListener("mouseup", () => showOriginal(false));
+  btnCompare.addEventListener("mouseleave", () => showOriginal(false));
+
+  // 吸管：跟随光标的取色预览光标
+  window.addEventListener("mousemove", e => {
+    if (!picking) return;
+    if (!e.target.closest("#stage")) { $("#stage").classList.remove("picking"); return; }
+    $("#stage").classList.add("picking");
+  });
+
+  // 拖放
+  const stage = $("#stage");
+  let dragDepth = 0;
+  window.addEventListener("dragenter", e => {
+    e.preventDefault();
+    dragDepth++;
+    stage.classList.add("dragover");
+  });
+  window.addEventListener("dragover", e => e.preventDefault());
+  window.addEventListener("dragleave", e => {
+    dragDepth = Math.max(0, dragDepth - 1);
+    if (!dragDepth) stage.classList.remove("dragover");
+  });
+  window.addEventListener("drop", e => {
+    e.preventDefault();
+    dragDepth = 0;
+    stage.classList.remove("dragover");
+    const dt = e.dataTransfer;
+    if (!dt) return;
+    const f = dt.files && dt.files[0];
+    if (f) { loadFile(f); return; }
+    const url = dt.getData("text/uri-list") || dt.getData("text/plain");
+    if (url) fetch(url).then(r => r.blob()).then(loadBlob).catch(() => toast("无法载入该地址"));
+  });
+
+  // 粘贴
+  window.addEventListener("paste", e => {
+    const items = e.clipboardData && e.clipboardData.items;
+    if (!items) return;
+    for (const it of items) {
+      if (it.type && it.type.indexOf("image") === 0) {
+        loadBlob(it.getAsFile());
+        e.preventDefault();
+        return;
+      }
+    }
+  });
+
+  // 窗口尺寸变化
+  let rt = 0;
+  window.addEventListener("resize", () => {
+    clearTimeout(rt);
+    rt = setTimeout(layoutStage, 120);
+  });
+
+  // 快捷键
+  window.addEventListener("keydown", e => {
+    const k = e.key.toLowerCase();
+    if (e.ctrlKey && k === "s") {
+      e.preventDefault();
+      exportPng();
+      return;
+    }
+    if (e.key === "Escape" && picking) { finishPick(); toast("已取消吸管"); return; }
+    if (e.ctrlKey || e.altKey || e.metaKey) return;
+    if (!S.img) return;
+
+    // T 切换映射方向，C 切换抠图方式，I 吸管
+    if (k === "t") {
+      setParam("tone", P.tone === "light" ? "dark" : "light");
+      toast(P.tone === "light" ? "越亮越大" : "越暗越大");
+    } else if (k === "c") {
+      const order = ["auto", "key", "alpha", "none"];
+      const next = order[(order.indexOf(P.cutout) + 1) % order.length];
+      setParam("cutout", next);
+      toast("抠图：" + ({ auto: "自动", key: "色键", alpha: "透明通道", none: "不抠图" })[next]);
+    } else if (k === "i") {
+      if (P.cutout !== "key") setParam("cutout", "key");
+      ACTIONS.pick();
+    }
+  });
+}
+
+/* ============================ 启动 ============================ */
+
+loadParams();
+buildPanel();
+syncUI();
+initEvents();
+</script>
+</body>
+</html>
